@@ -51,11 +51,14 @@ def generate_test_data(
     Returns:
         A list of tuples containing model and text.
     """
-    if seed:
+    if seed is not None:
+        print(f"Using deterministic seed: {seed}")
         rng = random.Random(seed)
     else:
         # Non-deterministic version of tests
-        rng = random.Random()
+        seed = random.randint(0, 2**32 - 1)  # noqa: S311
+        print(f"Using non-deterministic seed: {seed}")
+        rng = random.Random(seed)
     models = list(model_max_tokens.keys())
     test_data = []
     for _ in range(ntests):
@@ -103,7 +106,12 @@ def run_comparison_test(
     """
     text1 = impl1(text=text, model=model)
     text2 = impl2(text=text, model=model)
-    assert text1 == text2, f"{label1} vs {label2} mismatch for model {model}"
+    assert text1 == text2, (
+        f"{label1} vs {label2} mismatch for model {model}.\n"
+        f"Original text: {text}\n"
+        f"{label1} text: {text1}\n"
+        f"{label2} text: {text2}"
+    )
 
 
 @pytest.mark.parametrize("model,text", test_data_slow_vs_medium)
@@ -136,6 +144,47 @@ def test_medium_vs_fast(model: str, text: str) -> None:
 def version() -> Generator[str, None, None]:
     """Sample pytest fixture."""
     yield tiktoken_truncate.__version__
+
+
+# Add explicit test cases with known inputs
+explicit_test_cases = [
+    ("text-embedding-3-large", "This is a simple test case for tiktoken truncate."),
+    (
+        "text-embedding-3-large",
+        "Another example with a slightly longer text to test the truncation.",
+    ),
+    ("text-embedding-3-large", "A different model with a short text."),
+    (
+        "text-embedding-3-large",
+        "Testing with a model and a much longer text to see how it handles.",
+    ),
+]
+
+
+@pytest.mark.parametrize("model,text", explicit_test_cases)
+def test_explicit_cases_slow_vs_medium(model: str, text: str) -> None:
+    """Explicit test cases comparing the slow and medium implementations."""
+    run_comparison_test(
+        truncate_document_to_max_tokens_slow,
+        truncate_document_to_max_tokens_medium,
+        model,
+        text,
+        "Slow",
+        "Medium",
+    )
+
+
+@pytest.mark.parametrize("model,text", explicit_test_cases)
+def test_explicit_cases_medium_vs_fast(model: str, text: str) -> None:
+    """Explicit test cases comparing the medium and fast implementations."""
+    run_comparison_test(
+        truncate_document_to_max_tokens_medium,
+        truncate_document_to_max_tokens_fast,
+        model,
+        text,
+        "Medium",
+        "Fast",
+    )
 
 
 def test_version(version: str) -> None:
