@@ -1,7 +1,7 @@
 """Tests for `tiktoken_truncate` module."""
 
 import random
-from typing import Callable, Generator, List, Optional, Tuple
+from typing import Generator, List, Optional, Protocol, Tuple
 
 import pytest
 import tiktoken
@@ -23,6 +23,18 @@ from tiktoken_truncate.tiktoken_truncate import (
 # Set up the test parameters
 NTESTS_SLOW_VS_MEDIUM = 30
 NTESTS_MEDIUM_VS_FAST = 100
+
+
+class TruncateFunction(Protocol):
+    """Protocol for functions that truncate text to a maximum number of tokens.
+
+    This protocol defines a callable that takes keyword arguments `text` and `model`,
+    both of type `str`, and returns a `str`.
+    """
+
+    def __call__(self, *, text: str, model: str) -> str:
+        """Dummy call."""
+        ...
 
 
 def generate_test_data(
@@ -72,8 +84,8 @@ test_data_medium_vs_fast = generate_test_data(
 
 
 def run_comparison_test(
-    impl1: Callable[[str, str], str],
-    impl2: Callable[[str, str], str],
+    impl1: TruncateFunction,
+    impl2: TruncateFunction,
     model: str,
     text: str,
     label1: str,
