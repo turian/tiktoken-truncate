@@ -25,6 +25,8 @@ classifiers=[
 
 [tool.poetry.dependencies]
 python = "<3.13,>=3.9"
+tiktoken = "^0.7.0"
+typeguard = "^4.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.1"
