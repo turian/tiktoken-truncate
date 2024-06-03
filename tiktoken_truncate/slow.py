@@ -35,7 +35,7 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
         )
         return text
 
-    for k in range(len(text), 1, -1):
+    for k in range(len(text), 1, -1):  # pragma: no cover
         text = text[:k]  # Remove the last character
         tokens = encoding.encode(text)
         if len(tokens) <= max_tokens:

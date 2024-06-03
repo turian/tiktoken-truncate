@@ -49,12 +49,14 @@ def find_bounds(
             low = high_estimated_length
             return low, high
 
+    """
     low_estimated_length = estimated_length
     while low is None:
         low_estimated_length = min(int(low_estimated_length / 1.1), low_estimated_length - 10)
         low_ntokens = len(encoding.encode(text[:low_estimated_length]))
         if low_ntokens < max_tokens:
             low = low_estimated_length
+    """
 
     return low, high
 
@@ -72,8 +74,9 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
     _, high = find_bounds(text, encoding, max_tokens, avg_tokens_per_char)
 
     truelen = high
-    # for truelen in range(high, low, -1): # Maybe down to 1?
-    for truelen in range(high, 1, -1):  # Maybe down to 1?
+    # We exclude this from coverage, unfortunately
+    # because we always expect to break
+    for truelen in range(high, 1, -1):  # pragma: no cover
         if len(encoding.encode(text[:truelen])) <= max_tokens:
             break
 
