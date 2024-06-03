@@ -1,4 +1,4 @@
-"""Medium speed truncation of strings to the maximum token length, using tiktoken."""
+"""Fast truncation of strings to the maximum token length, using tiktoken."""
 
 from typing import Tuple
 
