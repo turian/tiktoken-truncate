@@ -69,14 +69,20 @@ def binary_search_max_length(
         mid_tokens = cached_encode_length(encoding_cache, encoding, text, mid)
         if mid_tokens <= max_tokens:
             if mid <= low:
-                raise AssertionError(f"mid_tokens: {mid_tokens}, low: {low}, high: {high}")
+                raise AssertionError(
+                    f"Binary search error: mid ({mid}) is not greater than low ({low}) - "
+                    f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+                )
             low = mid
         else:
             if mid >= high:
-                raise AssertionError(f"mid_tokens: {mid_tokens}, low: {low}, high: {high}")
+                raise AssertionError(
+                    f"Binary search error: mid ({mid}) is not less than high ({high}) - "
+                    f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+                )
             high = mid
     if low != high:
-        raise AssertionError(f"low: {low}, high: {high}")
+        raise AssertionError(f"Binary search error: low ({low}) is not equal to high ({high})")
     return low
 
 
@@ -106,7 +112,10 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
         high = expand_high(encoding_cache, encoding, text, high, max_tokens)
 
         if cached_encode_length(encoding_cache, encoding, text, high) <= max_tokens:
-            raise AssertionError(f"Unable to truncate text to {max_tokens} tokens")
+            raise AssertionError(
+                f"High bound error: unable to truncate text to {max_tokens} tokens, "
+                f"current high: {high}, text length: {len(text)}"
+            )
 
         max_length = binary_search_max_length(
             encoding_cache, encoding, text, low, high, max_tokens
@@ -115,5 +124,4 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
         return text[:max_length]
 
     finally:
-        # Clean up the cache after the function ends
         encoding_cache.clear()
