@@ -18,7 +18,7 @@ from tiktoken_truncate.tiktoken_truncate import (
 )
 
 # Set up the test parameters
-NTESTS = 2
+NTESTS = 30
 rng = random.Random()
 rng.seed(0)
 models = list(model_max_tokens.keys())
@@ -30,7 +30,7 @@ for _ in range(NTESTS):
     max_tokens = model_max_tokens[model]
     encoding = tiktoken.encoding_for_model(model)
     estimated_characters = max_tokens / get_avg_tokens_per_char(encoding=encoding)
-    k = int(estimated_characters * rng.uniform(0.5, 2.0))
+    k = int(estimated_characters * rng.uniform(0.1, 2.0))
     text = random_string(k=k, seed=rng.randint(0, 2**32))
     test_data.append((model, text))
 
