@@ -1,6 +1,6 @@
 """Fast speed truncation of strings to the maximum token length, using tiktoken."""
 
-from typing import Dict
+from typing import Dict, Tuple
 
 import tiktoken
 from tiktoken import Encoding
@@ -116,7 +116,7 @@ def handle_high_half(
     mid: int,
     mid_tokens: int,
     max_tokens: int,
-) -> int:
+) -> Tuple[int, bool]:
     """Handle the high half of the binary search."""
     if mid > high:
         raise AssertionError(
@@ -126,7 +126,7 @@ def handle_high_half(
         )
     elif mid == high:
         if mid_tokens == max_tokens:
-            return mid
+            return mid, True
         else:
             if mid_tokens <= max_tokens:
                 raise AssertionError(
@@ -136,7 +136,7 @@ def handle_high_half(
             high = mid - 1
     else:
         high = mid
-    return high
+    return high, False
 
 
 @typechecked
@@ -157,9 +157,11 @@ def binary_search_max_length(
                 encoding_cache, encoding, text, low, high, mid, mid_tokens, max_tokens
             )
         else:
-            high = handle_high_half(
+            high, done = handle_high_half(
                 encoding_cache, encoding, text, low, high, mid, mid_tokens, max_tokens
             )
+            if done:
+                return high
     if low != high:
         raise AssertionError(f"Binary search error: low ({low}) is not equal to high ({high})")
     if cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
