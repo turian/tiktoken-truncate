@@ -133,3 +133,5 @@ dmypy.json
 
 # Code editors
 .vscode
+
+*.sw?

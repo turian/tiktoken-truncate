@@ -1,6 +1,6 @@
-"""Fast truncation of strings to the maximum token length, using tiktoken."""
+"""Fast speed truncation of strings to the maximum token length, using tiktoken."""
 
-from typing import Tuple
+from typing import Dict, Tuple
 
 import tiktoken
 from tiktoken import Encoding
@@ -10,18 +10,19 @@ from tiktoken_truncate.globals import model_max_tokens
 from tiktoken_truncate.random_string import random_string
 
 # Cache for average tokens per character
-avg_tokens_per_char_cache = {}
+avg_tokens_per_char_cache: Dict[Encoding, float] = {}
 
 
+@typechecked
 def estimate_avg_tokens_per_char(encoding: Encoding) -> float:
     """Estimate the average number of tokens per character, using a random string."""
     sample_text = random_string(1024)
     tokens = encoding.encode(sample_text)
     avg = len(tokens) / len(sample_text)
-    print(f"Estimated average tokens per character: {avg} for {encoding}")
     return avg
 
 
+@typechecked
 def get_avg_tokens_per_char(encoding: Encoding) -> float:
     """Get the average tokens per character, cached."""
     global avg_tokens_per_char_cache
@@ -30,59 +31,201 @@ def get_avg_tokens_per_char(encoding: Encoding) -> float:
     return avg_tokens_per_char_cache[encoding]
 
 
-def find_bounds(
-    text: str, encoding: Encoding, max_tokens: int, avg_tokens_per_char: float
-) -> Tuple[int, int]:
-    """Find the initial bounds for binary search."""
-    estimated_length = int(max_tokens / avg_tokens_per_char)
-    low, high = None, None
+@typechecked
+def cached_encode_length(
+    encoding_cache: Dict[int, int], encoding: Encoding, text: str, length: int
+) -> int:
+    """Return the number of tokens for the given text length, using cache."""
+    if length > len(text):
+        raise AssertionError(f"length ({length}) is greater than text ({len(text)})")
+    if length not in encoding_cache:
+        encoding_cache[length] = len(encoding.encode(text[:length]))
+    return encoding_cache[length]
 
-    high_estimated_length = estimated_length
-    while high is None:
-        high_estimated_length = max(int(high_estimated_length * 1.1), high_estimated_length + 10)
-        if high_estimated_length >= len(text):
+
+@typechecked
+def expand_high(
+    encoding_cache: Dict[int, int], encoding: Encoding, text: str, high: int, max_tokens: int
+) -> int:
+    """Expand the high bound until the token count exceeds max_tokens."""
+    while cached_encode_length(encoding_cache, encoding, text, high) <= max_tokens:
+        high = max(int(high * 1.1), high + 1)
+        if high >= len(text):
             high = len(text)
-        high_ntokens = len(encoding.encode(text[:high_estimated_length]))
-        print(f"high_estimated_length: {high_estimated_length}, high_ntokens: {high_ntokens}")
-        if high_ntokens > max_tokens:
-            high = high_estimated_length
-            low = high_estimated_length
-            return low, high
+            break
+    return high
 
-    """
-    low_estimated_length = estimated_length
-    while low is None:
-        low_estimated_length = min(int(low_estimated_length / 1.1), low_estimated_length - 10)
-        low_ntokens = len(encoding.encode(text[:low_estimated_length]))
-        if low_ntokens < max_tokens:
-            low = low_estimated_length
-    """
 
-    return low, high
+@typechecked
+def expand_low(
+    encoding_cache: Dict[int, int], encoding: Encoding, text: str, low: int, max_tokens: int
+) -> int:
+    """Expand the low bound until the token count is at most max_tokens."""
+    while cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
+        low = min(int(low / 1.1), low - 1)
+    if low <= 0:
+        raise AssertionError(f"low ({low}) is less than or equal to 0")
+    if low > len(text):
+        raise AssertionError(f"low ({low}) is greater than len(text) ({len(text)})")
+    return low
+
+
+@typechecked
+def handle_low_half(
+    encoding_cache: Dict[int, int],
+    encoding: Encoding,
+    text: str,
+    low: int,
+    high: int,
+    mid: int,
+    mid_tokens: int,
+    max_tokens: int,
+) -> int:
+    """Handle the low half of the binary search."""
+    if mid < low:
+        raise AssertionError(
+            f"Binary search error: mid ({mid}) is not greater than low ({low}) - "
+            f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+        )
+    elif mid == low:
+        mid += 1
+        if mid > high:
+            raise AssertionError(
+                f"Binary search error: mid ({mid}) is not greater than high ({high}) - "
+                f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+            )
+        low = mid
+    else:
+        if mid > high:
+            raise AssertionError(
+                f"Binary search error: mid ({mid}) is not less "
+                f"than high ({high}) - "
+                f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+            )
+        low = mid
+    return low
+
+
+@typechecked
+def handle_high_half(
+    encoding_cache: Dict[int, int],
+    encoding: Encoding,
+    text: str,
+    low: int,
+    high: int,
+    mid: int,
+    mid_tokens: int,
+    max_tokens: int,
+) -> Tuple[int, bool]:
+    """Handle the high half of the binary search."""
+    if mid > high:
+        raise AssertionError(
+            f"Binary search error: mid ({mid}) is not less than "
+            f"high ({high}) - "
+            f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+        )
+    elif mid == high:
+        if mid_tokens == max_tokens:
+            return mid, True
+        else:
+            if mid_tokens <= max_tokens:
+                raise AssertionError(
+                    f"Binary search error: mid ({mid}) tokens "
+                    f"({mid_tokens}) is not less than or equal to max_tokens"
+                )
+            high = mid - 1
+    else:
+        high = mid
+    return high, False
+
+
+@typechecked
+def binary_search_max_length(
+    encoding_cache: Dict[int, int],
+    encoding: Encoding,
+    text: str,
+    low: int,
+    high: int,
+    max_tokens: int,
+) -> int:
+    """Use binary search to find the maximal length where the token count is <= max_tokens."""
+    while low < high:
+        mid = (low + high + 1) // 2
+        mid_tokens = cached_encode_length(encoding_cache, encoding, text, mid)
+        if mid_tokens <= max_tokens:
+            low = handle_low_half(
+                encoding_cache, encoding, text, low, high, mid, mid_tokens, max_tokens
+            )
+        else:
+            high, done = handle_high_half(
+                encoding_cache, encoding, text, low, high, mid, mid_tokens, max_tokens
+            )
+            if done:
+                return high
+    if low != high:
+        raise AssertionError(f"Binary search error: low ({low}) is not equal to high ({high})")
+    if cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
+        raise AssertionError(
+            f"Binary search error: low ({low}) tokens "
+            f"({cached_encode_length(encoding_cache, encoding, text, low)}) "
+            f"is not less than or equal to max_tokens {max_tokens}"
+        )
+    return low
 
 
 @typechecked
 def truncate_document_to_max_tokens(text: str, model: str) -> str:
     """Fast truncation of strings to the maximum token length, using tiktoken."""
-    print(f"truncate_document_to_max_tokens: {len(text)} characters")
-    max_tokens = model_max_tokens[model]
-    encoding = tiktoken.encoding_for_model(model)
+    encoding_cache: Dict[int, int] = {}
 
-    avg_tokens_per_char = get_avg_tokens_per_char(encoding)
+    try:
+        max_tokens = model_max_tokens[model]
+        encoding = tiktoken.encoding_for_model(model)
+        avg_tokens_per_char = get_avg_tokens_per_char(encoding)
 
-    # Estimate initial bounds without encoding the entire text
-    _, high = find_bounds(text, encoding, max_tokens, avg_tokens_per_char)
+        # Compute estimated_length based on average tokens per character
+        estimated_length = int(max_tokens / avg_tokens_per_char)
 
-    truelen = high
-    # We exclude this from coverage, unfortunately
-    # because we always expect to break
-    for truelen in range(high, 1, -1):  # pragma: no cover
-        if len(encoding.encode(text[:truelen])) <= max_tokens:
-            break
+        if estimated_length >= len(text):
+            if cached_encode_length(encoding_cache, encoding, text, len(text)) <= max_tokens:
+                return text  # Entire text is within limits, return as is
+            else:
+                high = len(text)
+        else:
+            high = estimated_length
 
-    print(
-        f"FAST Estimated true length: {len(encoding.encode(text[:truelen]))} "
-        f"for {truelen} characters"
-    )
+        low = high
 
-    return text[:truelen]
+        high = expand_high(encoding_cache, encoding, text, high, max_tokens)
+        if high == len(text):
+            return text
+
+        low = expand_low(encoding_cache, encoding, text, low, max_tokens)
+
+        if cached_encode_length(encoding_cache, encoding, text, high) <= max_tokens:
+            raise AssertionError(
+                f"High bound error: unable to truncate text to {max_tokens} tokens, "
+                f"current high: {high}, text length: {len(text)}"
+            )
+        if cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
+            raise AssertionError(
+                f"Binary search error: low ({low}) tokens "
+                f"({cached_encode_length(encoding_cache, encoding, text, low)}) "
+                f"is greater than max_tokens"
+            )
+
+        max_length = binary_search_max_length(
+            encoding_cache, encoding, text, low, high, max_tokens
+        )
+
+        if cached_encode_length(encoding_cache, encoding, text, max_length) > max_tokens:
+            raise AssertionError(
+                f"Binary search error: max_length ({max_length}) tokens "
+                f"({cached_encode_length(encoding_cache, encoding, text, max_length)}) "
+                f"is greater than max_tokens"
+            )
+
+        return text[:max_length]
+
+    finally:
+        encoding_cache.clear()
