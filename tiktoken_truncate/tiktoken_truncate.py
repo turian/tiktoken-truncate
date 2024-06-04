@@ -71,6 +71,75 @@ def expand_low(
 
 
 @typechecked
+def handle_low_half(
+    encoding_cache: Dict[int, int],
+    encoding: Encoding,
+    text: str,
+    low: int,
+    high: int,
+    mid: int,
+    mid_tokens: int,
+    max_tokens: int,
+) -> int:
+    """Handle the low half of the binary search."""
+    if mid < low:
+        raise AssertionError(
+            f"Binary search error: mid ({mid}) is not greater than low ({low}) - "
+            f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+        )
+    elif mid == low:
+        mid += 1
+        if mid > high:
+            raise AssertionError(
+                f"Binary search error: mid ({mid}) is not greater than high ({high}) - "
+                f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+            )
+        low = mid
+    else:
+        if mid > high:
+            raise AssertionError(
+                f"Binary search error: mid ({mid}) is not less "
+                f"than high ({high}) - "
+                f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+            )
+        low = mid
+    return low
+
+
+@typechecked
+def handle_high_half(
+    encoding_cache: Dict[int, int],
+    encoding: Encoding,
+    text: str,
+    low: int,
+    high: int,
+    mid: int,
+    mid_tokens: int,
+    max_tokens: int,
+) -> int:
+    """Handle the high half of the binary search."""
+    if mid > high:
+        raise AssertionError(
+            f"Binary search error: mid ({mid}) is not less than "
+            f"high ({high}) - "
+            f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
+        )
+    elif mid == high:
+        if mid_tokens == max_tokens:
+            return mid
+        else:
+            if mid_tokens <= max_tokens:
+                raise AssertionError(
+                    f"Binary search error: mid ({mid}) tokens "
+                    f"({mid_tokens}) is not less than or equal to max_tokens"
+                )
+            high = mid - 1
+    else:
+        high = mid
+    return high
+
+
+@typechecked
 def binary_search_max_length(
     encoding_cache: Dict[int, int],
     encoding: Encoding,
@@ -80,62 +149,17 @@ def binary_search_max_length(
     max_tokens: int,
 ) -> int:
     """Use binary search to find the maximal length where the token count is <= max_tokens."""
-    if cached_encode_length(encoding_cache, encoding, text, high) <= max_tokens:
-        raise AssertionError(
-            f"Binary search error: high ({high}) tokens "
-            f"({cached_encode_length(encoding_cache, encoding, text, high)}) "
-            f"is not less than or equal to max_tokens"
-        )
-    if cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
-        raise AssertionError(
-            f"Binary search error: low ({low}) tokens "
-            f"({cached_encode_length(encoding_cache, encoding, text, low)}) "
-            f"is greater than max_tokens"
-        )
     while low < high:
         mid = (low + high + 1) // 2
         mid_tokens = cached_encode_length(encoding_cache, encoding, text, mid)
         if mid_tokens <= max_tokens:
-            if mid < low:
-                raise AssertionError(
-                    f"Binary search error: mid ({mid}) is not greater than low ({low}) - "
-                    f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
-                )
-            elif mid == low:
-                mid += 1
-                if mid > high:
-                    raise AssertionError(
-                        f"Binary search error: mid ({mid}) is not greater than high ({high}) - "
-                        f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
-                    )
-                low = mid
-            else:
-                if mid > high:
-                    raise AssertionError(
-                        f"Binary search error: mid ({mid}) is not less "
-                        f"than high ({high}) - "
-                        f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
-                    )
-                low = mid
+            low = handle_low_half(
+                encoding_cache, encoding, text, low, high, mid, mid_tokens, max_tokens
+            )
         else:
-            if mid > high:
-                raise AssertionError(
-                    f"Binary search error: mid ({mid}) is not less than "
-                    f"high ({high}) - "
-                    f"mid_tokens: {mid_tokens}, low: {low}, high: {high}"
-                )
-            elif mid == high:
-                if mid_tokens == max_tokens:
-                    return mid
-                else:
-                    if mid_tokens <= max_tokens:
-                        raise AssertionError(
-                            f"Binary search error: mid ({mid}) tokens "
-                            f"({mid_tokens}) is not less than or equal to max_tokens"
-                        )
-                    high = mid - 1
-            else:
-                high = mid
+            high = handle_high_half(
+                encoding_cache, encoding, text, low, high, mid, mid_tokens, max_tokens
+            )
     if low != high:
         raise AssertionError(f"Binary search error: low ({low}) is not equal to high ({high})")
     if cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
@@ -180,6 +204,12 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
             raise AssertionError(
                 f"High bound error: unable to truncate text to {max_tokens} tokens, "
                 f"current high: {high}, text length: {len(text)}"
+            )
+        if cached_encode_length(encoding_cache, encoding, text, low) > max_tokens:
+            raise AssertionError(
+                f"Binary search error: low ({low}) tokens "
+                f"({cached_encode_length(encoding_cache, encoding, text, low)}) "
+                f"is greater than max_tokens"
             )
 
         max_length = binary_search_max_length(
