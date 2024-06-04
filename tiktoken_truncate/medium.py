@@ -85,4 +85,7 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
         f"for {truelen} characters"
     )
 
+    if len(encoding.encode(text[:truelen])) > max_tokens:
+        raise AssertionError("Cannot truncate text to exactly max_tokens")
+
     return text[:truelen]

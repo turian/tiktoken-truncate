@@ -218,6 +218,13 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
             encoding_cache, encoding, text, low, high, max_tokens
         )
 
+        if cached_encode_length(encoding_cache, encoding, text, max_length) > max_tokens:
+            raise AssertionError(
+                f"Binary search error: max_length ({max_length}) tokens "
+                f"({cached_encode_length(encoding_cache, encoding, text, max_length)}) "
+                f"is greater than max_tokens"
+            )
+
         return text[:max_length]
 
     finally:

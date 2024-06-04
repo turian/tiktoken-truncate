@@ -22,7 +22,7 @@ from tiktoken_truncate.tiktoken_truncate import (
 
 # Set up the test parameters
 NTESTS_SLOW_VS_MEDIUM = 30
-NTESTS_MEDIUM_VS_FAST = 100
+NTESTS_MEDIUM_VS_FAST = 1000
 
 
 class TruncateFunction(Protocol):
