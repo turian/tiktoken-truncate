@@ -110,7 +110,11 @@ def run_comparison_test(
         f"{label1} vs {label2} mismatch for model {model}.\n"
         f"Original text: {text}\n"
         f"{label1} text: {text1}\n"
-        f"{label2} text: {text2}"
+        f"{label2} text: {text2}\n"
+        f"{label1} text length: {len(text1)}, "
+        f"num tokens: {len(tiktoken.encoding_for_model(model).encode(text1))}\n"
+        f"{label2} text length: {len(text2)}, "
+        f"num tokens: {len(tiktoken.encoding_for_model(model).encode(text2))}\n"
     )
 
 
@@ -138,12 +142,6 @@ def test_medium_vs_fast(model: str, text: str) -> None:
         "Medium",
         "Fast",
     )
-
-
-@pytest.fixture
-def version() -> Generator[str, None, None]:
-    """Sample pytest fixture."""
-    yield tiktoken_truncate.__version__
 
 
 # Add explicit test cases with known inputs
@@ -187,9 +185,30 @@ def test_explicit_cases_medium_vs_fast(model: str, text: str) -> None:
     )
 
 
+# Test function to run the comparison
+def test_specific_input_medium_vs_fast() -> None:
+    """Test specific input comparing the medium and fast implementations."""
+    text = ".\x0bvO#-3U>{\\R;\t_K0uDL0T(U8*WT\\qO(#+r\\mD@D`{"
+
+    run_comparison_test(
+        truncate_document_to_max_tokens_medium,
+        truncate_document_to_max_tokens_fast,
+        "text-embedding-3-large",
+        text,
+        "Medium",
+        "Fast",
+    )
+
+
 def test_version(version: str) -> None:
     """Sample pytest test function with the pytest fixture as an argument."""
     assert version == "0.1.0"
+
+
+@pytest.fixture
+def version() -> Generator[str, None, None]:
+    """Sample pytest fixture."""
+    yield tiktoken_truncate.__version__
 
 
 if __name__ == "__main__":

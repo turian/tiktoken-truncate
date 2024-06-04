@@ -81,7 +81,7 @@ def truncate_document_to_max_tokens(text: str, model: str) -> str:
             break
 
     print(
-        f"FAST Estimated true length: {len(encoding.encode(text[:truelen]))} "
+        f"MEDIUM Estimated true length: {len(encoding.encode(text[:truelen]))} "
         f"for {truelen} characters"
     )
 
